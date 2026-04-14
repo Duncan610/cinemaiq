@@ -1,1 +1,1 @@
-# cinemaiq
+# CinemaIQ
