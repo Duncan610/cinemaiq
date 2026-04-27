@@ -1,4 +1,4 @@
-#!/home/otieno/CINEMAIQ/cinemaiq/venv/bin/python3
+#!/home/mint/CINEMAIQ/cinemaiq/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
