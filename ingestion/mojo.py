@@ -15,125 +15,160 @@ Why Box Office Mojo?
   This is a PUBLIC web page — no API key needed.
   We use BeautifulSoup to parse the HTML table.
 
-Note on scraping ethics:
-  Box Office Mojo is owned by IMDb/Amazon. We scrape politely:
-  - One request at a time
-  - User-Agent header so we don't look like a bot
-  - No hammering — we get weekly data, not per-minute
 
 Returns: a pandas DataFrame with one row per movie per week.
 """
-
-import time
 import requests
-import pandas as pd
-from datetime import datetime
 from bs4 import BeautifulSoup
+import pandas as pd
+import time
+import logging
+from datetime import datetime
 
-# Box Office Mojo weekly chart — shows top ~200 movies each week
-BASE_URL = "https://www.boxofficemojo.com/weekly/"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
-    )
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": "https://www.google.com/",
 }
 
+BASE_URL = "https://www.boxofficemojo.com"
 
-def fetch_weekly_chart(url: str = BASE_URL) -> list[dict]:
+
+def scrape_yearly_chart(year: int) -> list[dict]:
     """
-    Scrapes the current weekly box office chart.
-    Returns a list of dicts, one per movie.
+    Scrape Box Office Mojo yearly world chart for a given year.
+    Handles tables with or without a <tbody> wrapper.
     """
+    url = f"{BASE_URL}/year/world/{year}/"
+    logger.info(f"Scraping: {url}")
+
     try:
         response = requests.get(url, headers=HEADERS, timeout=15)
         response.raise_for_status()
-    except Exception as e:
-        print(f"  Box Office Mojo fetch error: {e}")
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch {url}: {e}")
         return []
 
-    soup = BeautifulSoup(response.text, "lxml")
+    soup = BeautifulSoup(response.text, "html.parser")
 
-    # The main data table
     table = soup.find("table")
     if not table:
-        print("  Box Office Mojo: could not find data table")
+        logger.warning(f"No table found for year {year}")
         return []
 
-    rows = []
-    tbody = table.find("tbody")
-    if not tbody:
+    # BOM does not always use <tbody> — get ALL rows, skip first (header)
+    all_rows = table.find_all("tr")
+    data_rows = all_rows[1:]
+
+    if not data_rows:
+        logger.warning(f"No data rows found for year {year}")
         return []
 
-    for tr in tbody.find_all("tr"):
-        cells = tr.find_all("td")
-        if len(cells) < 9:
+    movies = []
+
+    def clean_number(text):
+        cleaned = text.replace("$", "").replace(",", "").strip()
+        return int(cleaned) if cleaned.lstrip("-").isdigit() else None
+
+    for row in data_rows:
+        cols = row.find_all("td")
+        if len(cols) < 4:
             continue
-
         try:
-            # Clean dollar amounts: '$12,345,678' → 12345678
-            def clean_money(s: str) -> int | None:
-                s = s.strip().replace("$", "").replace(",", "")
-                return int(s) if s.isdigit() else None
+            rank_text  = cols[0].get_text(strip=True)
+            title_text = cols[1].get_text(strip=True)
+            title_link = cols[1].find("a")
+            detail_url = BASE_URL + title_link["href"] if title_link else None
 
-            # Clean percentage: '-42.3%' → -42.3
-            def clean_pct(s: str) -> float | None:
-                s = s.strip().replace("%", "").replace("+", "")
-                try:
-                    return float(s)
-                except ValueError:
-                    return None
+            worldwide_gross = clean_number(cols[2].get_text(strip=True))
+            domestic_gross  = clean_number(cols[3].get_text(strip=True))
+            opening_weekend = clean_number(cols[4].get_text(strip=True)) if len(cols) > 4 else None
+            release_date    = cols[5].get_text(strip=True)               if len(cols) > 5 else None
 
-            rows.append({
-                "rank":               int(cells[0].get_text(strip=True)) if cells[0].get_text(strip=True).isdigit() else None,
-                "rank_last_week":     int(cells[1].get_text(strip=True)) if cells[1].get_text(strip=True).isdigit() else None,
-                "title":              cells[2].get_text(strip=True),
-                "studio":             cells[3].get_text(strip=True),
-                "weekly_gross_usd":   clean_money(cells[4].get_text(strip=True)),
-                "pct_change_week":    clean_pct(cells[5].get_text(strip=True)),
-                "theatres":           clean_money(cells[6].get_text(strip=True)),
-                "per_theatre_usd":    clean_money(cells[7].get_text(strip=True)),
-                "total_gross_usd":    clean_money(cells[8].get_text(strip=True)),
-                "weeks_in_release":   int(cells[9].get_text(strip=True)) if len(cells) > 9 and cells[9].get_text(strip=True).isdigit() else None,
+            movies.append({
+                "rank":            int(rank_text) if rank_text.isdigit() else None,
+                "title":           title_text,
+                "year":            year,
+                "worldwide_gross": worldwide_gross,
+                "domestic_gross":  domestic_gross,
+                "opening_weekend": opening_weekend,
+                "release_date":    release_date,
+                "detail_url":      detail_url,
+                "scraped_at":      datetime.utcnow().isoformat(),
             })
         except Exception as e:
-            # Skip malformed rows silently
+            logger.warning(f"Row parse error (year={year}): {e}")
             continue
 
-    return rows
+    logger.info(f"  -> {len(movies)} movies scraped for {year}")
+    return movies
 
 
-def ingest() -> pd.DataFrame:
-    """
-    Main function called by the Airflow DAG.
-    Returns a clean DataFrame ready for Snowflake loading.
-    """
-    print("Starting Box Office Mojo ingestion...")
+def scrape_movie_budget(detail_url: str) -> dict:
+    """Visit individual movie page to get production budget."""
+    if not detail_url:
+        return {}
+    try:
+        resp = requests.get(detail_url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"Detail page error {detail_url}: {e}")
+        return {}
 
-    rows = fetch_weekly_chart()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for div in soup.find_all("div", class_=lambda c: c and "mojo-summary" in c):
+        label = div.find("span", string=lambda s: s and "Production Budget" in s)
+        if label:
+            value = label.find_next("span")
+            if value:
+                raw = value.get_text(strip=True).replace("$", "").replace(",", "")
+                return {"production_budget": int(raw) if raw.isdigit() else None}
+    return {"production_budget": None}
 
-    if not rows:
-        print("  Warning: no rows returned from Box Office Mojo")
-        # Return empty DataFrame with correct schema so the loader doesn't break
-        return pd.DataFrame(columns=[
-            "rank", "rank_last_week", "title", "studio",
-            "weekly_gross_usd", "pct_change_week", "theatres",
-            "per_theatre_usd", "total_gross_usd", "weeks_in_release",
-            "scraped_date", "ingested_at",
-        ])
 
-    df = pd.DataFrame(rows)
-    df["scraped_date"] = datetime.utcnow().date()
-    df["ingested_at"]  = datetime.utcnow()
+def scrape_years(
+    start_year: int,
+    end_year: int,
+    delay: float = 2.5,
+    enrich_budget: bool = False,
+) -> pd.DataFrame:
+    """Scrape multiple years. enrich_budget=True hits individual pages for budget."""
+    all_movies = []
+    for year in range(start_year, end_year + 1):
+        movies = scrape_yearly_chart(year)
+        if enrich_budget:
+            for movie in movies:
+                movie.update(scrape_movie_budget(movie.get("detail_url")))
+                time.sleep(delay)
+        else:
+            time.sleep(delay)
+        all_movies.extend(movies)
 
-    print(f"  Box Office ingestion complete — {len(df)} rows")
+    df = pd.DataFrame(all_movies)
+    logger.info(f"Total movies collected: {len(df)}")
     return df
 
 
-# ── Standalone test ────────────────────────────────────────────────────────
+def save_to_csv(df: pd.DataFrame, output_path: str) -> None:
+    df.to_csv(output_path, index=False)
+    logger.info(f"Saved {len(df)} rows -> {output_path}")
+
+
 if __name__ == "__main__":
-    df = ingest()
-    print(df[["rank", "title", "weekly_gross_usd", "total_gross_usd"]].head(10))
-    print(f"\nShape: {df.shape}")
+    df = scrape_years(start_year=2022, end_year=2023, delay=2.5)
+
+    if df.empty:
+        print("No data returned — check logs above.")
+    else:
+        print(df.head(10).to_string())
+        print(f"\nShape:   {df.shape}")
+        print(f"Columns: {list(df.columns)}")
+        save_to_csv(df, "box_office_mojo_raw.csv")
