@@ -1,1 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# dbt
+dbt_cinemiq/target/
+dbt_cinemiq/dbt_packages/
+dbt_cinemiq/logs/
+dbt_cinemiq/.user.yml
+
+# dbt profiles — contains Snowflake password
+dbt_cinemiq/profiles.yml
+
+# Airflow
+logs/
+airflow.db
+
+# Data files
+*.tsv
+*.tsv.gz
+*.csv
+*.parquet
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swpvenv/
+airflow_env/
+dbt_env/
 .env
