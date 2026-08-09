@@ -1,177 +1,91 @@
-"""
-omdb_ingestor.py
-────────────────
-Pulls movie ratings from the Open Movie Database (OMDB) API.
-
-Why OMDB and not just TMDB for ratings?
-  OMDB aggregates scores from THREE sources in one call:
-    - IMDb rating (general audience)
-    - Rotten Tomatoes % (critics)
-    - Metacritic score (critics weighted)
-
-  The GAP between critic score and audience score is one of the most
-  analytically interesting signals in this project. A movie with
-  90% RT but 6.0 IMDb is very different from one with 60% RT and 8.5 IMDb.
-
-  This divergence score is our "critic_audience_gap" feature.
-
-What it fetches:
-  We use a list of popular movie titles seeded from TMDB — so OMDB
-  enriches the movies we already know about.
-
-Returns: a pandas DataFrame with one row per movie.
-"""
-
-import os
-import time
-import requests
+import os, time, requests
 import pandas as pd
 from datetime import datetime
-from dotenv import load_dotenv
+from loguru import logger
 
-load_dotenv()
-
-OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 BASE_URL = "http://www.omdbapi.com/"
 
-# Seed list of movies to look up — drawn from consistently popular titles.
-# In production this would be driven by what's in your TMDB RAW table.
-# For the initial load, we use a manually curated list of 50+ titles
-# that gives good coverage across genres and years.
-SEED_TITLES = [
-    "Oppenheimer", "Barbie", "Dune Part Two", "Poor Things",
-    "The Holdovers", "Killers of the Flower Moon", "Past Lives",
-    "May December", "Saltburn", "Priscilla",
-    "Mission Impossible Dead Reckoning", "Indiana Jones Dial of Destiny",
-    "Guardians of the Galaxy Vol 3", "Ant-Man Quantumania",
-    "Spider-Man Across the Spider-Verse", "The Little Mermaid",
-    "Elemental", "Wish", "The Creator", "Blue Beetle",
-    "Aquaman Lost Kingdom", "The Flash", "Shazam Fury of the Gods",
-    "Fast X", "Transformers Rise of the Beasts",
-    "John Wick Chapter 4", "Extraction 2", "Heart of Stone",
-    "The Killer", "All Quiet on the Western Front",
-    "Avatar The Way of Water", "Top Gun Maverick", "Elvis",
-    "The Batman", "Doctor Strange Multiverse of Madness",
-    "Thor Love and Thunder", "Black Panther Wakanda Forever",
-    "Glass Onion", "Babylon", "Tar", "Women Talking",
-    "Everything Everywhere All at Once", "CODA", "Belfast",
-    "Drive My Car", "The Power of the Dog", "Dune",
-    "No Time to Die", "Shang-Chi", "Eternals",
-    "Wonka", "Napoleon", "The Marvels",
-]
+
+def get_api_key() -> str:
+    key = os.getenv("OMDB_API_KEY")
+    if not key:
+        raise ValueError("OMDB_API_KEY not set")
+    return key
 
 
-def fetch_omdb(title: str) -> dict | None:
-    """
-    Fetches full movie data for one title from OMDB.
-    Returns None if the movie isn't found.
-    """
-    params = {
-        "apikey": OMDB_API_KEY,
-        "t": title,        # search by title
-        "type": "movie",
-        "tomatoes": "true",  # include Rotten Tomatoes data
-    }
+def fetch_by_title(title: str, year: int = None) -> dict:
+    params = {"apikey": get_api_key(), "t": title, "type": "movie", "plot": "short"}
+    if year:
+        params["y"] = year
     try:
-        response = requests.get(BASE_URL, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        if data.get("Response") == "True":
-            return data
-        else:
-            print(f"  OMDB: '{title}' not found — {data.get('Error', 'unknown')}")
-            return None
+        resp = requests.get(BASE_URL, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("Response") == "False":
+            logger.warning(f"OMDB no result: '{title}' ({year})")
+            return {}
+        return data
     except Exception as e:
-        print(f"  OMDB error for '{title}': {e}")
-        return None
+        logger.error(f"OMDB fetch failed '{title}': {e}")
+        return {}
 
 
-def parse_rating(value: str) -> float | None:
-    """
-    Converts rating strings to floats.
-    '8.5/10' → 8.5
-    '94%'    → 94.0
-    '78/100' → 78.0
-    'N/A'    → None
-    """
-    if not value or value == "N/A":
-        return None
+def parse_rating(ratings_list, source):
+    for r in ratings_list:
+        if r.get("Source") == source:
+            v = r.get("Value", "")
+            try:
+                if "%" in v: return float(v.replace("%", ""))
+                if "/" in v: return float(v.split("/")[0])
+                return float(v)
+            except ValueError:
+                return None
+    return None
+
+
+def flatten_to_row(raw: dict) -> dict:
+    ratings = raw.get("Ratings", [])
+    rt = parse_rating(ratings, "Rotten Tomatoes")
+    mc = parse_rating(ratings, "Metacritic")
     try:
-        if "/" in value:
-            num, denom = value.split("/")
-            # Normalise to 0–10 scale
-            return round(float(num.strip()) / float(denom.strip()) * 10, 2)
-        elif "%" in value:
-            return float(value.replace("%", "").strip())
-        else:
-            return float(value.strip())
-    except Exception:
-        return None
+        imdb = float(raw.get("imdbRating", "N/A"))
+    except (ValueError, TypeError):
+        imdb = None
+    critic_scores = [s for s in [rt, mc] if s is not None]
+    avg_critic = round(sum(critic_scores) / len(critic_scores), 1) if critic_scores else None
+    imdb_norm = round(imdb * 10, 1) if imdb else None
+    gap = round(avg_critic - imdb_norm, 1) if (avg_critic and imdb_norm) else None
+    bo_raw = raw.get("BoxOffice", "N/A")
+    try:
+        box_office = int(bo_raw.replace("$", "").replace(",", "")) if bo_raw != "N/A" else None
+    except (ValueError, AttributeError):
+        box_office = None
+    return {
+        "imdb_id": raw.get("imdbID"), "title": raw.get("Title"), "year": raw.get("Year"),
+        "rated": raw.get("Rated"), "released": raw.get("Released"), "runtime": raw.get("Runtime"),
+        "genre": raw.get("Genre"), "director": raw.get("Director"), "actors": raw.get("Actors"),
+        "plot": raw.get("Plot"), "country": raw.get("Country"), "awards": raw.get("Awards"),
+        "imdb_rating": imdb, "imdb_votes": (raw.get("imdbVotes") or "").replace(",", "") or None,
+        "rt_score": rt, "metacritic_score": mc, "avg_critic_score": avg_critic,
+        "imdb_normalised": imdb_norm, "critic_audience_gap": gap, "box_office_usd": box_office,
+        "ingested_at": datetime.utcnow().isoformat(),
+    }
 
 
-def ingest() -> pd.DataFrame:
-    """
-    Main function called by the Airflow DAG.
-    Returns a clean DataFrame ready for Snowflake loading.
-    """
-    print("Starting OMDB ingestion...")
+def run(movie_list: list, delay: float = 0.25) -> pd.DataFrame:
     rows = []
-
-    for i, title in enumerate(SEED_TITLES):
-        data = fetch_omdb(title)
-        if data is None:
-            continue
-
-        # Extract ratings from the Ratings array
-        ratings = {r["Source"]: r["Value"] for r in data.get("Ratings", [])}
-
-        imdb_score  = parse_rating(data.get("imdbRating"))
-        rt_score    = parse_rating(ratings.get("Rotten Tomatoes"))
-        meta_score  = parse_rating(data.get("Metascore"))
-
-        # The key derived signal: how much do critics and audiences disagree?
-        # Positive = critics like it more than audiences
-        # Negative = audiences like it more than critics
-        critic_audience_gap = None
-        if rt_score is not None and imdb_score is not None:
-            # Both on 0-10 scale after normalisation
-            rt_normalised = rt_score / 10.0  # rt_score is 0-100
-            critic_audience_gap = round(rt_normalised - imdb_score, 2)
-
-        rows.append({
-            "imdb_id":              data.get("imdbID"),
-            "title":                data.get("Title"),
-            "year":                 data.get("Year"),
-            "rated":                data.get("Rated"),
-            "runtime_minutes":      data.get("Runtime", "").replace(" min", "") or None,
-            "genre":                data.get("Genre"),
-            "director":             data.get("Director"),
-            "actors":               data.get("Actors"),
-            "plot":                 data.get("Plot"),
-            "country":              data.get("Country"),
-            "box_office_usd":       data.get("BoxOffice", "").replace("$", "").replace(",", "") or None,
-            "imdb_rating":          imdb_score,
-            "imdb_votes":           data.get("imdbVotes", "").replace(",", "") or None,
-            "rt_score":             rt_score,
-            "metacritic_score":     meta_score,
-            "critic_audience_gap":  critic_audience_gap,
-            "awards":               data.get("Awards"),
-            "ingested_at":          datetime.utcnow(),
-        })
-
-        # Be kind to the free tier — 1000 req/day limit
-        if i % 10 == 0:
-            print(f"  OMDB: {i+1}/{len(SEED_TITLES)} processed")
-        time.sleep(0.1)
-
+    for movie in movie_list:
+        raw = fetch_by_title(movie.get("title", ""), movie.get("year"))
+        if raw:
+            rows.append(flatten_to_row(raw))
+        time.sleep(delay)
     df = pd.DataFrame(rows)
-    print(f"  OMDB ingestion complete — {len(df)} rows")
+    logger.info(f"OMDB ingestion complete: {len(df)} rows")
     return df
 
 
-# ── Standalone test ────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    df = ingest()
-    print(df[["title", "imdb_rating", "rt_score", "metacritic_score", "critic_audience_gap"]].head(10))
-    print(f"\nShape: {df.shape}")
+    from dotenv import load_dotenv
+    load_dotenv()
+    df = run([{"title": "Oppenheimer", "year": 2023}, {"title": "Barbie", "year": 2023}])
+    print(df[["title", "imdb_rating", "rt_score", "critic_audience_gap"]])
