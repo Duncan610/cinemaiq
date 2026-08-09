@@ -1,12 +1,8 @@
+apache-airflow-providers-snowflake==4.4.2
 requests==2.31.0
+beautifulsoup4==4.12.3
+pytrends==4.9.2
 pandas==2.1.4
-numpy==1.26.4
+snowflake-connector-python==3.6.0
 python-dotenv==1.0.0
 loguru==0.7.2
-snowflake-connector-python==3.12.0
-snowflake-sqlalchemy==1.5.1
-beautifulsoup4==4.12.3
-lxml==5.1.0
-pytrends==4.9.2
-apache-airflow-providers-http==4.7.0
-apache-airflow-providers-snowflake>=5.0.0
