@@ -2,6 +2,7 @@ import argparse, gzip
 import pandas as pd
 from datetime import datetime
 from loguru import logger
+from loader import load_to_snowflake, log_audit
 
 
 def load_basics(path: str, start_year: int = 2000) -> pd.DataFrame:
@@ -35,11 +36,9 @@ def load_ratings(path: str) -> pd.DataFrame:
 def run(basics_path: str, ratings_path: str):
     return load_basics(basics_path), load_ratings(ratings_path)
 
-
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
-    from snowflake_loader import load_to_snowflake, log_audit
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--basics", required=True)

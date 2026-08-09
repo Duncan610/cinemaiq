@@ -1,5 +1,5 @@
 """
-test_api_keys.py
+test_connections.py
 ─────────────────
 Quick standalone check — confirms old API keys still work
 before running the full pipeline. Run this first.
