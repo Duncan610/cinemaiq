@@ -21,8 +21,8 @@ default_args = {"owner": "cinemiq", "retries": 2, "retry_delay": timedelta(minut
 
 
 def task_ingest_tmdb(**ctx):
-    from tmdb_ingestor import run
-    from snowflake_loader import load_to_snowflake, log_audit
+    from tmdb import run                      
+    from loader import load_to_snowflake, log_audit    
     df = run(years=TARGET_YEARS, pages_per_year=5)
     n = load_to_snowflake(df, "RAW_TMDB_MOVIES", truncate=True)
     log_audit("RAW_TMDB_MOVIES", n, "TMDB_API")
@@ -30,8 +30,8 @@ def task_ingest_tmdb(**ctx):
 
 
 def task_ingest_omdb(**ctx):
-    from omdb_ingestor import run
-    from snowflake_loader import load_to_snowflake, log_audit
+    from omdb import run                      
+    from loader import load_to_snowflake, log_audit
     df = run(MOVIE_LIST)
     n = load_to_snowflake(df, "RAW_OMDB_RATINGS", truncate=True)
     log_audit("RAW_OMDB_RATINGS", n, "OMDB_API")
@@ -39,8 +39,8 @@ def task_ingest_omdb(**ctx):
 
 
 def task_ingest_newsapi(**ctx):
-    from newsapi_ingestor import run
-    from snowflake_loader import load_to_snowflake, log_audit
+    from news_api import run                  
+    from loader import load_to_snowflake, log_audit
     df = run(MOVIE_TITLES, days_back=30)
     n = load_to_snowflake(df, "RAW_NEWS_ARTICLES", truncate=True)
     log_audit("RAW_NEWS_ARTICLES", n, "NEWSAPI")
@@ -48,8 +48,8 @@ def task_ingest_newsapi(**ctx):
 
 
 def task_ingest_box_office(**ctx):
-    from box_office_ingestor import run
-    from snowflake_loader import load_to_snowflake, log_audit
+    from mojo import run                     
+    from loader import load_to_snowflake, log_audit
     df = run(start_year=2019, end_year=2024)
     n = load_to_snowflake(df, "RAW_BOX_OFFICE", truncate=True)
     log_audit("RAW_BOX_OFFICE", n, "BOX_OFFICE_MOJO")
@@ -57,8 +57,8 @@ def task_ingest_box_office(**ctx):
 
 
 def task_ingest_trends(**ctx):
-    from google_trends_ingestor import run
-    from snowflake_loader import load_to_snowflake, log_audit
+    from trends import run                   
+    from loader import load_to_snowflake, log_audit
     df = run(movie_titles=MOVIE_TITLES, timeframes=["today 12-m", "today 3-m"])
     n = load_to_snowflake(df, "RAW_GOOGLE_TRENDS", truncate=True)
     log_audit("RAW_GOOGLE_TRENDS", n, "GOOGLE_TRENDS")
@@ -66,7 +66,7 @@ def task_ingest_trends(**ctx):
 
 
 def task_check_imdb(**ctx):
-    from snowflake_loader import get_connection
+    from loader import get_connection          
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM CINEMAIQ.RAW.RAW_IMDB_BASICS")

@@ -1,21 +1,25 @@
 version: '3.8'
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.8.1-python3.11
+  image: apache/airflow:2.10.5-python3.11
+  user: "${AIRFLOW_UID:-50000}:0"
   environment: &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__WEBSERVER__WORKERS: '1'
+    AIRFLOW__WEBSERVER__WORKER_REFRESH_BATCH_SIZE: '1'
+    AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: '300'
+    AIRFLOW__CORE__PARALLELISM: '2'
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '2'
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: '1'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: '60'
+    HOME: /home/airflow
+    AIRFLOW__CORE__EXECUTOR: SequentialExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-    AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
-    AIRFLOW__CORE__DEFAULT_TIMEZONE: 'UTC'
-    # CinemaIQ secrets — loaded from .env
     TMDB_API_KEY: ${TMDB_API_KEY}
-    REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID}
-    REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET}
-    REDDIT_USERNAME: ${REDDIT_USERNAME}
-    REDDIT_PASSWORD: ${REDDIT_PASSWORD}
+    OMDB_API_KEY: ${OMDB_API_KEY}
+    NEWSAPI_KEY: ${NEWSAPI_KEY}
     SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
     SNOWFLAKE_USER: ${SNOWFLAKE_USER}
     SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD}
@@ -23,11 +27,12 @@ x-airflow-common: &airflow-common
     SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
     SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE}
   volumes:
-    - ./dags:/opt/airflow/dags
-    - ./logs:/opt/airflow/logs
-    - ./plugins:/opt/airflow/plugins
-    - ./ingestion:/opt/airflow/ingestion
-    - ./config:/opt/airflow/config
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./ingestion:/opt/airflow/ingestion
+      - ./requirements_airflow.txt:/requirements.txt
+      - /etc/passwd:/etc/passwd:ro
   depends_on:
     postgres:
       condition: service_healthy
@@ -47,7 +52,6 @@ services:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 10s
       retries: 5
-      start_period: 5s
     restart: always
 
   airflow-webserver:
@@ -60,18 +64,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 30s
     restart: always
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
     restart: always
 
   airflow-init:
@@ -80,17 +77,11 @@ services:
     command:
       - -c
       - |
+        pip install -r /requirements.txt &&
         airflow db init &&
         airflow users create \
-          --username admin \
-          --firstname CinemaIQ \
-          --lastname Admin \
-          --role Admin \
-          --email admin@cinemiq.com \
-          --password admin
-    environment:
-      <<: *airflow-common-env
-      _AIRFLOW_DB_UPGRADE: 'true'
+          --username admin --firstname CinemaIQ --lastname Admin \
+          --role Admin --email admin@cinemiq.com --password admin
 
 volumes:
   postgres_data:
