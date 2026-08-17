@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: int_movies_unified
+    description: >
+      Core spine of the Intermediate layer — TMDB enriched with IMDb,
+      OMDB, and Box Office Mojo data via fuzzy title+year matching.
+      One row per tmdb_id.
+    columns:
+      - name: tmdb_id
+        tests: [not_null, unique]
+      - name: title
+        tests: [not_null]
+
+  - name: int_movie_genres
+    description: "Exploded genres — one row per (movie, genre) pair."
+    columns:
+      - name: tmdb_id
+        tests: [not_null]
+      - name: genre
+        tests: [not_null]
+
+  - name: int_movie_cast
+    description: "Exploded top-5 cast — one row per (movie, actor) pair."
+    columns:
+      - name: tmdb_id
+        tests: [not_null]
+      - name: actor_name
+        tests: [not_null]
+
+  - name: int_news_coverage
+    description: "NewsAPI articles aggregated to one row per movie — buzz metrics."
+    columns:
+      - name: movie_query
+        tests: [not_null, unique]
+      - name: total_articles
+        tests: [not_null]
+
+  - name: int_trends_windowed
+    description: "Google Trends aggregated to one row per (movie, window_type)."
+    columns:
+      - name: movie_title_normalized
+        tests: [not_null]
+      - name: window_type
+        tests:
+          - accepted_values:
+              values: ['3_month', '12_month', 'other']
