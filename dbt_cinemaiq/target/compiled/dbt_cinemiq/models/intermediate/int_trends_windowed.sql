@@ -21,7 +21,7 @@ once for its 12-month trend summary.
 
 WITH trends AS (
     SELECT *
-    FROM {{ ref('stg_google_trends') }}
+    FROM CINEMAIQ.DEV_staging.stg_google_trends
 ),
 
 aggregated AS (

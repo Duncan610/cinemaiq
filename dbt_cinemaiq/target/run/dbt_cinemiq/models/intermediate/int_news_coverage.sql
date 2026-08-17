@@ -1,4 +1,8 @@
-/*
+
+  create or replace   view CINEMAIQ.DEV_intermediate.int_news_coverage
+  
+   as (
+    /*
 int_news_coverage.sql
 
 WHAT THIS MODEL DOES:
@@ -23,7 +27,7 @@ GRAIN: one row per movie_query (which maps ~1:1 to a movie title).
 
 WITH articles AS (
     SELECT *
-    FROM {{ ref('stg_news_articles') }}
+    FROM CINEMAIQ.DEV_staging.stg_news_articles
 ),
 
 aggregated AS (
@@ -65,3 +69,5 @@ classified AS (
 
 SELECT *
 FROM classified
+  );
+

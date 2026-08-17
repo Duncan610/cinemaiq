@@ -23,7 +23,7 @@ WITH movies AS (
         release_year,
         revenue_usd,
         top_cast_raw
-    FROM {{ ref('int_movies_unified') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_unified
     WHERE top_cast_raw IS NOT NULL
       AND top_cast_raw != ''
 ),

@@ -1,4 +1,8 @@
-/*
+
+  create or replace   view CINEMAIQ.DEV_intermediate.int_trends_windowed
+  
+   as (
+    /*
 int_trends_windowed.sql
 
 WHAT THIS MODEL DOES:
@@ -21,7 +25,7 @@ once for its 12-month trend summary.
 
 WITH trends AS (
     SELECT *
-    FROM {{ ref('stg_google_trends') }}
+    FROM CINEMAIQ.DEV_staging.stg_google_trends
 ),
 
 aggregated AS (
@@ -52,3 +56,5 @@ classified AS (
 
 SELECT *
 FROM classified
+  );
+
