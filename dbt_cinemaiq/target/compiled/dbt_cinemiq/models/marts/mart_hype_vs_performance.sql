@@ -26,23 +26,23 @@ so nobody mistakes it for more than it is.
 
 WITH movies AS (
     SELECT *
-    FROM {{ ref('int_movies_unified') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_unified
 ),
 
 news AS (
     SELECT *
-    FROM {{ ref('int_news_coverage') }}
+    FROM CINEMAIQ.DEV_intermediate.int_news_coverage
 ),
 
 trends_12m AS (
     SELECT *
-    FROM {{ ref('int_trends_windowed') }}
+    FROM CINEMAIQ.DEV_intermediate.int_trends_windowed
     WHERE window_type = '12_month'
 ),
 
 trends_3m AS (
     SELECT *
-    FROM {{ ref('int_trends_windowed') }}
+    FROM CINEMAIQ.DEV_intermediate.int_trends_windowed
     WHERE window_type = '3_month'
 ),
 

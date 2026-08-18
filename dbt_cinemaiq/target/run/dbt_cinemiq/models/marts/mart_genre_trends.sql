@@ -1,4 +1,10 @@
-/*
+
+  
+    
+
+        create or replace transient table CINEMAIQ.DEV_marts.mart_genre_trends
+         as
+        (/*
 
 mart_genre_trends.sql
 
@@ -27,14 +33,14 @@ lower than Drama"  a real pattern worth surfacing, not just revenue.
 WITH genres AS (
 
     SELECT *
-    FROM {{ ref('int_movies_genres') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_genres
 
 ),
 
 movies AS (
 
     SELECT *
-    FROM {{ ref('int_movies_unified') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_unified
 
 ),
 
@@ -94,3 +100,6 @@ rounded AS (
 
 SELECT *
 FROM rounded
+        );
+      
+  

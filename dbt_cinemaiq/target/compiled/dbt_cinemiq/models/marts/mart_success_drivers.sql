@@ -28,14 +28,14 @@ second has higher raw revenue.
 
 WITH movies AS (
     SELECT *
-    FROM {{ ref('int_movies_unified') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_unified
 ),
 
 genre_counts AS (
     SELECT
         tmdb_id,
         COUNT(*) AS genre_count
-    FROM {{ ref('int_movies_genres') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_genres
     GROUP BY tmdb_id
 ),
 
@@ -43,7 +43,7 @@ cast_counts AS (
     SELECT
         tmdb_id,
         COUNT(*) AS cast_count
-    FROM {{ ref('int_movie_cast') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movie_cast
     GROUP BY tmdb_id
 ),
 

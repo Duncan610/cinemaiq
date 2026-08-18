@@ -1,4 +1,10 @@
-/*
+
+  
+    
+
+        create or replace transient table CINEMAIQ.DEV_marts.mart_prerelease_signals
+         as
+        (/*
 mart_prerelease_signals.sql
 
 WHAT THIS MART ANSWERS:
@@ -26,18 +32,18 @@ with a misleading null outcome.
 
 WITH movies AS (
     SELECT *
-    FROM {{ ref('int_movies_unified') }}
+    FROM CINEMAIQ.DEV_intermediate.int_movies_unified
     WHERE opening_weekend_usd IS NOT NULL
 ),
 
 news AS (
     SELECT *
-    FROM {{ ref('int_news_coverage') }}
+    FROM CINEMAIQ.DEV_intermediate.int_news_coverage
 ),
 
 trends_3m AS (
     SELECT *
-    FROM {{ ref('int_trends_windowed') }}
+    FROM CINEMAIQ.DEV_intermediate.int_trends_windowed
     WHERE window_type = '3_month'
 ),
 
@@ -92,3 +98,6 @@ scored AS (
 
 SELECT *
 FROM scored
+        );
+      
+  
