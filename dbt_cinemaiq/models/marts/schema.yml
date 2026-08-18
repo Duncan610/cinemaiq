@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: mart_success_drivers
+    description: >
+      One row per movie — budget, critic/audience gap, genre count,
+      cast count, revenue, ROI side by side. The kitchen-sink mart
+      for exploratory correlation analysis.
+    columns:
+      - name: tmdb_id
+        tests: [not_null, unique]
+      - name: title
+        tests: [not_null]
+
+  - name: mart_genre_trends
+    description: >
+      One row per (genre, release_year). Movies contribute to every
+      genre they're tagged with, so a 3-genre movie appears in 3 rows.
+    columns:
+      - name: genre
+        tests: [not_null]
+      - name: release_year
+        tests: [not_null]
+
+  - name: mart_hype_vs_performance
+    description: >
+      One row per movie. Combines NewsAPI + both Google Trends windows
+      into a simple hype_score, compared against actual revenue outcome.
+    columns:
+      - name: tmdb_id
+        tests: [not_null, unique]
+      - name: hype_category
+        tests:
+          - accepted_values:
+              values: ['high_hype', 'moderate_hype', 'low_hype']
+
+  - name: mart_prerelease_signals
+    description: >
+      One row per movie WITH opening weekend data. Uses only the
+      3-month trends window (cleanest pre-release signal) against
+      opening_weekend_usd specifically, not total revenue.
+    columns:
+      - name: tmdb_id
+        tests: [not_null, unique]
+      - name: opening_weekend_usd
+        tests: [not_null]

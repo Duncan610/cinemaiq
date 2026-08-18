@@ -93,4 +93,4 @@ rounded AS (
 )
 
 SELECT *
-FROM rounded;
+FROM rounded
