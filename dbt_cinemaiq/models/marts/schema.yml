@@ -42,5 +42,5 @@ models:
     columns:
       - name: tmdb_id
         tests: [not_null, unique]
-      - name: opening_weekend_usd
+      - name: revenue_usd
         tests: [not_null]

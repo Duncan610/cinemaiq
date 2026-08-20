@@ -2,32 +2,38 @@
 mart_prerelease_signals.sql
 
 WHAT THIS MART ANSWERS:
-"Can pre-release signals predict opening weekend specifically?"
-This is the narrow, prediction-focused sibling of mart_hype_vs_performance.
-Two deliberate scoping choices set it apart:
+"Can pre-release signals predict a movie's box office outcome?"
 
-Only the 3-MONTH trends window is used, not 12-month. The 3-month
-window is the cleanest "right before release" signal — the 12-month
-window mixes in long-term franchise buildup that isn't a fair
-predictor for a general model (a Marvel movie has 12-month interest
-from being Marvel, not from THIS movie's marketing).
+REVISION NOTE:
+This mart originally targeted OPENING WEEKEND specifically. That
+required a working opening-weekend figure from Box Office Mojo, which
+turned out not to exist on the yearly chart page we scrape (Box Office
+Mojo restructured that page; it no longer has an "Opening" column at
+all, confirmed by inspecting the actual table headers rather than
+assuming a position). Getting real opening-weekend data would require
+scraping hundreds of individual per-weekend pages out of scope for
+now. This mart targets REVENUE_USD (total gross) instead. The
+underlying question "do pre-release signals predict outcome" still
+holds; the outcome variable is just less surgically "pre-release-only"
+than opening weekend would have been, since total revenue is also
+shaped by post-release word of mouth.
 
-The outcome variable is OPENING WEEKEND, not total revenue. Total
-revenue is shaped by word-of-mouth AFTER release — a bad opening
-can still "legs" its way to a strong total. Opening weekend is the
-one number that's purely a function of PRE-release anticipation,
-which is exactly what this mart's inputs are trying to predict.
+SCOPE NOTE ON PRE-RELEASE SIGNALS:
+prerelease_article_count and prerelease_peak_search only have real
+values for the ~80 highest-revenue movies in this dataset; that's
+where NewsAPI and Google Trends fetches were targeted, since fetching
+for all 600 movies isn't feasible under free-tier API limits. Movies
+outside that top 80 will show null/zero for these columns; the
+has_prerelease_signal_data flag makes that explicit so analysis can
+filter to only the movies with real signal.
 
-GRAIN: one row per movie (tmdb_id), restricted to movies that actually
-have an opening_weekend_usd figure no opening weekend data means
-this mart can't evaluate them, so they're excluded rather than kept
-with a misleading null outcome.
+GRAIN: one row per movie (tmdb_id) with a non-null revenue_usd.
 */
 
 WITH movies AS (
     SELECT *
     FROM {{ ref('int_movies_unified') }}
-    WHERE opening_weekend_usd IS NOT NULL
+    WHERE revenue_usd IS NOT NULL
 ),
 
 news AS (
@@ -47,9 +53,10 @@ joined AS (
         m.title,
         m.release_date,
         m.release_year,
-        m.opening_weekend_usd,
-        m.budget_usd,
         m.revenue_usd,
+        m.budget_usd,
+        m.roi_ratio,
+        m.revenue_tier,
 
         n.total_articles AS prerelease_article_count,
         n.avg_sentiment_rounded AS prerelease_sentiment,
@@ -71,14 +78,12 @@ joined AS (
 scored AS (
     SELECT
         *,
-        -- Opening weekend per dollar of budget — normalises for the fact
-        -- that a $200M movie SHOULD open bigger than a $20M movie
         CASE
             WHEN budget_usd IS NOT NULL
              AND budget_usd > 0
-            THEN ROUND(opening_weekend_usd / budget_usd, 3)
+            THEN ROUND(revenue_usd / budget_usd, 3)
             ELSE NULL
-        END AS opening_to_budget_ratio,
+        END AS revenue_to_budget_ratio,
 
         CASE
             WHEN prerelease_article_count IS NOT NULL
@@ -91,4 +96,4 @@ scored AS (
 )
 
 SELECT *
-FROM scored
+FROM scored;

@@ -103,26 +103,25 @@ scored AS (
 
     FROM joined
 ),
-
 classified AS (
     SELECT
         *,
         CASE
-            WHEN hype_score >= 60 THEN 'high_hype'
-            WHEN hype_score >= 25 THEN 'moderate_hype'
+            WHEN hype_score >= 40 THEN 'high_hype'
+            WHEN hype_score >= 20 THEN 'moderate_hype'
             ELSE 'low_hype'
         END AS hype_category,
 
         CASE
-            WHEN hype_score >= 60
+            WHEN hype_score >= 40
              AND revenue_tier IN ('blockbuster', 'wide_release')
                 THEN 'hype_matched_performance'
 
-            WHEN hype_score >= 60
+            WHEN hype_score >= 40
              AND revenue_tier IN ('limited_release', 'low_performer')
                 THEN 'overhyped'
 
-            WHEN hype_score < 25
+            WHEN hype_score < 20
              AND revenue_tier IN ('blockbuster', 'wide_release')
                 THEN 'quiet_success'
 
