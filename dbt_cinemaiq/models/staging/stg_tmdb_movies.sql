@@ -32,11 +32,15 @@ cleaned AS (
         TRY_CAST(cast_size AS INTEGER) AS cast_size,
         keywords AS keywords_raw,
         CASE
-            WHEN TRY_CAST(budget AS BIGINT) > 0 and TRY_CAST(revenue AS BIGINT) > 0
-            THEN round(TRY_CAST(revenue AS FLOAT) / TRY_CAST(budget AS FLOAT), 2)
+            WHEN TRY_CAST(budget AS BIGINT) > 0 AND TRY_CAST(revenue AS BIGINT) > 0
+            THEN ROUND(TRY_CAST(revenue AS FLOAT) / TRY_CAST(budget AS FLOAT), 2)
             ELSE NULL
         END AS roi_ratio,
-        YEAR(TRY_CAST(release_date AS DATE)) AS release_year,
+        DATE_FROM_PARTS(
+            YEAR(TRY_CAST(release_date AS DATE)),
+            1,
+            1
+        ) AS release_year,                  
         TRY_CAST(ingested_at AS TIMESTAMP_NTZ) AS ingested_at
     FROM SOURCE
 ),
