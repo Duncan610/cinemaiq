@@ -20,7 +20,7 @@ cleaned AS (
         TRIM(status) AS status,
         TRY_CAST(release_date AS DATE) AS release_date,
         TRY_CAST(runtime_minutes AS INTEGER) AS runtime_minutes,
-        NULLIF(TRY_CAST(budget AS BIGINT), 0) AS budget_usd,
+        CASE WHEN TRY_CAST(budget AS BIGINT) >= 1000 THEN TRY_CAST(budget AS BIGINT) ELSE NULL END AS budget_usd,
         NULLIF(TRY_CAST(revenue AS BIGINT), 0) AS revenue_usd,
         TRY_CAST(popularity AS FLOAT) AS tmdb_popularity,
         TRY_CAST(vote_average AS FLOAT) AS tmdb_rating,
