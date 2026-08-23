@@ -96,4 +96,4 @@ scored AS (
 )
 
 SELECT *
-FROM scored;
+FROM scored

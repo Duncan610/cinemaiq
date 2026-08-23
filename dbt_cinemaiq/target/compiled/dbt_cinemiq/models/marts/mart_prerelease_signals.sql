@@ -78,8 +78,6 @@ joined AS (
 scored AS (
     SELECT
         *,
-        -- Revenue per dollar of budget — normalises for the fact that
-        -- a $200M movie SHOULD gross more than a $20M movie in absolute terms
         CASE
             WHEN budget_usd IS NOT NULL
              AND budget_usd > 0

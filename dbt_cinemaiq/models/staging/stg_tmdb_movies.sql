@@ -36,11 +36,7 @@ cleaned AS (
             THEN ROUND(TRY_CAST(revenue AS FLOAT) / TRY_CAST(budget AS FLOAT), 2)
             ELSE NULL
         END AS roi_ratio,
-        DATE_FROM_PARTS(
-            YEAR(TRY_CAST(release_date AS DATE)),
-            1,
-            1
-        ) AS release_year,                  
+        YEAR(TRY_CAST(release_date AS DATE)) AS release_year,                  
         TRY_CAST(ingested_at AS TIMESTAMP_NTZ) AS ingested_at
     FROM SOURCE
 ),

@@ -190,4 +190,4 @@ joined AS (
 )
 
 SELECT *
-FROM joined;
+FROM joined

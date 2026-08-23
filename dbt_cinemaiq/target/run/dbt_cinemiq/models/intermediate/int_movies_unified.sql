@@ -39,65 +39,69 @@ release-year coverage.
 GRAIN: one row per tmdb_id.
 */
 
-with tmdb as (
-    select * from CINEMAIQ.DEV_staging.stg_tmdb_movies
+WITH tmdb AS (
+    SELECT *
+    FROM CINEMAIQ.DEV_staging.stg_tmdb_movies
 ),
 
-imdb as (
-    select * from CINEMAIQ.DEV_staging.stg_imdb_movies
+imdb AS (
+    SELECT *
+    FROM CINEMAIQ.DEV_staging.stg_imdb_movies
 ),
 
-omdb as (
-    select * from CINEMAIQ.DEV_staging.stg_omdb_ratings
+omdb AS (
+    SELECT *
+    FROM CINEMAIQ.DEV_staging.stg_omdb_ratings
 ),
 
-box_office as (
-    select * from CINEMAIQ.DEV_staging.stg_box_office
+box_office AS (
+    SELECT *
+    FROM CINEMAIQ.DEV_staging.stg_box_office
 ),
 
 -- Normalise TMDB title once so every join below uses the same key
-tmdb_keyed as (
-    select
+tmdb_keyed AS (
+    SELECT
         *,
-        lower(trim(title))     as join_title,
-        release_year           as join_year
-    from tmdb
+        LOWER(TRIM(title)) AS join_title,
+        release_year AS join_year
+    FROM tmdb
 ),
 
 -- Dedup IMDb: when multiple movies share a title+year, keep the one
 -- with the most votes — the version people actually mean by that title
-imdb_deduped as (
-    select *
-    from imdb
-    qualify row_number() over (
-        partition by title_normalized, release_year
-        order by num_votes desc nulls last
+imdb_deduped AS (
+    SELECT *
+    FROM imdb
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY title_normalized, release_year
+        ORDER BY num_votes DESC NULLS LAST
     ) = 1
 ),
 
 -- Dedup OMDB: same logic, ranked by IMDb vote count as the tiebreaker
-omdb_deduped as (
-    select *
-    from omdb
-    qualify row_number() over (
-        partition by lower(trim(title)), release_year
-        order by imdb_votes desc nulls last
+omdb_deduped AS (
+    SELECT *
+    FROM omdb
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY LOWER(TRIM(title)), release_year
+        ORDER BY imdb_votes DESC NULLS LAST
     ) = 1
 ),
 
 -- Dedup Box Office Mojo: rank by highest worldwide gross —
 -- the version with actual box office data is the one we want
-box_office_deduped as (
-    select *
-    from box_office
-    qualify row_number() over (
-        partition by title_normalized, release_year
-        order by worldwide_gross_usd desc nulls last
+box_office_deduped AS (
+    SELECT *
+    FROM box_office
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY title_normalized, release_year
+        ORDER BY worldwide_gross_usd DESC NULLS LAST
     ) = 1
 ),
 
-joined as (
-    select
+joined AS (
+    SELECT
         -- Identifiers
         t.tmdb_id,
         i.imdb_id,
@@ -114,8 +118,8 @@ joined as (
         t.tagline,
 
         -- Financials — prefer TMDB, fall back to Box Office Mojo when TMDB is null
-        coalesce(t.budget_usd, null)                          as budget_usd,
-        coalesce(t.revenue_usd, bo.worldwide_gross_usd)        as revenue_usd,
+        COALESCE(t.budget_usd, NULL) AS budget_usd,
+        COALESCE(t.revenue_usd, bo.worldwide_gross_usd) AS revenue_usd,
         bo.domestic_gross_usd,
         bo.worldwide_gross_usd,
         bo.opening_weekend_usd,
@@ -129,8 +133,8 @@ joined as (
 
         -- IMDb rating (independent audience signal, larger vote base)
         i.imdb_rating,
-        i.num_votes                as imdb_num_votes,
-        i.vote_confidence           as imdb_vote_confidence,
+        i.num_votes AS imdb_num_votes,
+        i.vote_confidence AS imdb_vote_confidence,
 
         -- OMDB — critic vs audience signal, the standout feature
         o.rt_score,
@@ -148,29 +152,48 @@ joined as (
         t.keywords_raw,
 
         -- Match quality flags — lets downstream marts filter confidently
-        case when i.imdb_id       is not null then true else false end as matched_imdb,
-        case when o.imdb_id       is not null then true else false end as matched_omdb,
-        case when bo.title        is not null then true else false end as matched_box_office
+        CASE
+            WHEN i.imdb_id IS NOT NULL THEN TRUE
+            ELSE FALSE
+        END AS matched_imdb,
 
-    from tmdb_keyed t
+        CASE
+            WHEN o.imdb_id IS NOT NULL THEN TRUE
+            ELSE FALSE
+        END AS matched_omdb,
+
+        CASE
+            WHEN bo.title IS NOT NULL THEN TRUE
+            ELSE FALSE
+        END AS matched_box_office
+
+    FROM tmdb_keyed t
 
     -- IMDb: match on normalised title + year, deduped source
-    left join imdb_deduped i
-        on t.join_title = i.title_normalized
-       and t.join_year  = i.release_year
+    LEFT JOIN imdb_deduped i
+        ON t.join_title = i.title_normalized
+       AND t.join_year = i.release_year
 
     -- OMDB: match through the IMDb id we just resolved (most reliable path)
     -- falls back to title+year match if IMDb didn't match
-    left join omdb_deduped o
-        on (i.imdb_id is not null and i.imdb_id = o.imdb_id)
-        or (i.imdb_id is null and t.join_title = lower(trim(o.title)) and t.join_year = o.release_year)
+    LEFT JOIN omdb_deduped o
+        ON (
+            i.imdb_id IS NOT NULL
+            AND i.imdb_id = o.imdb_id
+        )
+        OR (
+            i.imdb_id IS NULL
+            AND t.join_title = LOWER(TRIM(o.title))
+            AND t.join_year = o.release_year
+        )
 
     -- Box Office Mojo: no ID, title + year only, deduped source
-    left join box_office_deduped bo
-        on t.join_title = bo.title_normalized
-       and t.join_year  = bo.release_year
+    LEFT JOIN box_office_deduped bo
+        ON t.join_title = bo.title_normalized
+       AND t.join_year = bo.release_year
 )
 
-select * from joined
+SELECT *
+FROM joined
   );
 
