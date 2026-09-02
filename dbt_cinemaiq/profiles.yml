@@ -1,23 +1,44 @@
 dbt_cinemiq:
+
   target: dev
+
   outputs:
+
     dev:
       type: snowflake
-      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user:      "{{ env_var('SNOWFLAKE_USER') }}"
-      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
-      role:      CINEMAIQ_ROLE
-      database:  CINEMAIQ
+
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+
+      role: CINEMAIQ_ROLE
+      database: CINEMAIQ
       warehouse: CINEMAIQ_TRANSFORM_WH
-      schema:    DEV
-      threads:   4
+      schema: DEV
+      threads: 4
+
+    ci:
+      type: snowflake
+
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+
+      role: CINEMAIQ_ROLE
+      database: CINEMAIQ
+      warehouse: CINEMAIQ_TRANSFORM_WH
+      schema: CI
+      threads: 4
+
     prod:
       type: snowflake
-      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
-      user:      "{{ env_var('SNOWFLAKE_USER') }}"
-      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
-      role:      CINEMAIQ_ROLE
-      database:  CINEMAIQ
+
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+
+      role: CINEMAIQ_ROLE
+      database: CINEMAIQ
       warehouse: CINEMAIQ_TRANSFORM_WH
-      schema:    STAGING
-      threads:   8
+      schema: STAGING
+      threads: 8
