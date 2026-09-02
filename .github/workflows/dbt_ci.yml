@@ -1,0 +1,68 @@
+# .github/workflows/dbt_ci.yml
+#
+# WHAT THIS DOES:
+# Runs automatically every time code is pushed or a pull request is opened.
+# Installs dbt, connects to Snowflake using secrets (never hardcoded),
+# and runs dbt build + dbt test against the pipeline.
+# If any model fails to build or any test fails, this workflow fails —
+# and GitHub shows a red X on the commit/PR, catching regressions
+# (like the fan-out bug or threshold miscalibration) automatically,
+# before they ever reach main.
+
+name: dbt CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  dbt-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Pull the repo's code onto this fresh runner
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Install dbt and its Snowflake adapter
+      - name: Install dbt dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements_dbt.txt
+
+      # Install dbt packages (dbt_utils etc.)
+      - name: dbt deps
+        working-directory: dbt_cinemaiq
+        run: dbt deps
+
+      # Run of every model 
+      - name: dbt run
+        working-directory: dbt_cinemaiq
+        run: dbt run --target ci
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+
+      # run every data test — not_null, unique, accepted_range, etc.
+      - name: dbt test
+        working-directory: dbt_cinemaiq
+        run: dbt test --target ci
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
